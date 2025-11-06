@@ -1,0 +1,22 @@
+# Virtual environment
+venv/
+
+# Dataset (biar tidak memenuhi GitHub)
+data/
+
+# Output artifacts (ukuran besar)
+artifacts/
+spark-warehouse/
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Parquet & CSV outputs
+*.parquet
+*.csv
+
+# Logs
+*.log
+*.tmp
+*.crc
