@@ -3,7 +3,7 @@ from pyspark.sql.functions import (
 )
 from pyspark.storagelevel import StorageLevel
 from spark_utils import spark_session
-from config import RAW_PARQUET, FE_PARQUET, FE_SMALL, FEATURE_COLS
+from config import RAW_PARQUET, FE_PARQUET, FE_SMALL, FEATURE_COLS, PASSENGER_MIN, PASSENGER_MAX
 
 if __name__ == "__main__":
     spark = spark_session(app_name="NYC Taxi - Preprocessing")
@@ -18,7 +18,7 @@ if __name__ == "__main__":
         (col("pickup_latitude").between(38.0, 45.0)) &
         (col("dropoff_latitude").between(38.0, 45.0)) &
         (col("fare_amount") >= 0) &
-        (col("passenger_count").between(1, 6)) &
+        (col("passenger_count").between(PASSENGER_MIN, PASSENGER_MAX)) &
         col("pickup_datetime_ts").isNotNull()
     )
 
