@@ -49,7 +49,7 @@ if __name__ == "__main__":
     if not os.path.exists(DATA_CSV):
         raise FileNotFoundError(f"File tidak ditemukan: {DATA_CSV}")
 
-    schema = StructSchema = StructType([
+    schema = StructType([
         StructField("key", StringType(), True),
         StructField("fare_amount", DoubleType(), True),
         StructField("pickup_datetime", StringType(), True),

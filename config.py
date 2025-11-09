@@ -10,6 +10,14 @@ RAW_PARQUET = os.path.join(ART_DIR, "raw.parquet")          # output load_data
 FE_PARQUET  = os.path.join(ART_DIR, "fe.parquet")           # output preprocessing (full hasil filter+fitur)
 FE_SMALL    = os.path.join(ART_DIR, "fe_small.parquet")     # subset agar ringan di laptop
 
+# Folder preprocessing & modeling
+PREP_DIR = os.path.join(ART_DIR, "prep_pipeline")          # pipeline vectorizer+scaler
+TRAIN_FP = os.path.join(ART_DIR, "train.parquet")          # data training
+TEST_FP  = os.path.join(ART_DIR, "test.parquet")           # data testing
+BASELINE_DIR = os.path.join(ART_DIR, "baseline_models")    # model baseline
+BEST_RF_DIR = os.path.join(ART_DIR, "best_rf_model")       # best model after tuning
+METRICS_JSON = os.path.join(ART_DIR, "baseline_metrics.json")  # metrik evaluasi
+
 # Kolom fitur yang akan dipakai modeling di tahap berikutnya
 FEATURE_COLS = [
     "pickup_hour", "pickup_dow", "pickup_month", "pickup_year",

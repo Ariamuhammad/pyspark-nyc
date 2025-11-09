@@ -364,17 +364,23 @@ def plot_dashboard(
         axes[2, 1].text(0.5, 0.5, "Tidak ada data dalam rentang heatmap", ha="center", va="center")
 
     if not corr_matrix.empty:
+        # Sesuaikan font size berdasarkan jumlah kolom
+        annot_size = 10 if len(corr_matrix.columns) <= 7 else 8
         sns.heatmap(
             corr_matrix,
             annot=True,
-            fmt=".2f",
+            fmt=".3f",  # 3 decimal untuk lebih presisi
             cmap="coolwarm",
             center=0,
             linewidths=0.5,
             cbar_kws={"shrink": 0.7, "label": "Correlation"},
             ax=axes[2, 2],
+            annot_kws={"size": annot_size},
+            vmin=-1, vmax=1  # Rentang correlation -1 to 1
         )
-        axes[2, 2].set_title("Correlation Matrix")
+        axes[2, 2].set_title("Correlation Matrix (All Features)")
+        axes[2, 2].set_xlabel("")
+        axes[2, 2].set_ylabel("")
     else:
         axes[2, 2].text(0.5, 0.5, "Correlation tidak tersedia", ha="center", va="center")
 
@@ -519,21 +525,30 @@ if __name__ == "__main__":
     save_dataframe(dropoff_heat_pd, DROPOFF_HEAT_CSV)
     save_dataframe(fare_distance_heat_pd, FARE_DISTANCE_HEAT_CSV)
 
-    # Correlation matrix (fitur numerik utama)
-    corr_columns = [
-        "fare_amount",
-        "passenger_count",
-        "distance_km",
-        "pickup_hour",
-        "pickup_dow",
-        "pickup_month",
-    ]
-    corr_matrix = pd.DataFrame(index=corr_columns, columns=corr_columns, dtype=float)
-    for c1 in corr_columns:
-        for c2 in corr_columns:
-            corr_matrix.loc[c1, c2] = df.stat.corr(c1, c2)
+    # Correlation matrix (semua fitur yang akan dipakai modeling + target)
+    # Menggunakan FEATURE_COLS dari config untuk konsistensi
+    from config import FEATURE_COLS
+    
+    corr_columns = ["fare_amount"] + FEATURE_COLS  # Target + semua fitur
+    
+    # Verifikasi kolom ada di dataframe
+    available_cols = [c for c in corr_columns if c in df.columns]
+    if len(available_cols) < len(corr_columns):
+        missing_cols = set(corr_columns) - set(available_cols)
+        print(f"Warning: Kolom tidak tersedia untuk correlation: {missing_cols}")
+    
+    corr_matrix = pd.DataFrame(index=available_cols, columns=available_cols, dtype=float)
+    for c1 in available_cols:
+        for c2 in available_cols:
+            try:
+                corr_matrix.loc[c1, c2] = df.stat.corr(c1, c2)
+            except Exception as e:
+                print(f"Error calculating correlation for {c1} vs {c2}: {e}")
+                corr_matrix.loc[c1, c2] = 0.0
+    
     corr_matrix = corr_matrix.fillna(0.0)
     corr_matrix.to_csv(CORR_CSV)
+    print(f"Correlation matrix tersimpan di {CORR_CSV}")
 
     # Dashboard plot
     pickup_heat_pivot = pivot_heatmap(pickup_heat_pd)
