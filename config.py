@@ -15,7 +15,8 @@ PREP_DIR = os.path.join(ART_DIR, "prep_pipeline")          # pipeline vectorizer
 TRAIN_FP = os.path.join(ART_DIR, "train.parquet")          # data training
 TEST_FP  = os.path.join(ART_DIR, "test.parquet")           # data testing
 BASELINE_DIR = os.path.join(ART_DIR, "baseline_models")    # model baseline
-BEST_RF_DIR = os.path.join(ART_DIR, "best_rf_model")       # best model after tuning
+BEST_RF_DIR = os.path.join(ART_DIR, "best_rf_model")       # best RF model after tuning
+BEST_LR_DIR = os.path.join(ART_DIR, "best_lr_model")       # best Linear Regression after tuning
 METRICS_JSON = os.path.join(ART_DIR, "baseline_metrics.json")  # metrik evaluasi
 
 # Kolom fitur yang akan dipakai modeling di tahap berikutnya
