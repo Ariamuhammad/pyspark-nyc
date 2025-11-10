@@ -45,9 +45,9 @@ if __name__ == "__main__":
 
     print(json.dumps(metrics, indent=2))
 
-    lr_model.save(os.path.join(BASELINE_DIR, "lr"))
-    rf_model.save(os.path.join(BASELINE_DIR, "rf"))
-    gbt_model.save(os.path.join(BASELINE_DIR, "gbt"))
+    lr_model.write().overwrite().save(os.path.join(BASELINE_DIR, "lr"))
+    rf_model.write().overwrite().save(os.path.join(BASELINE_DIR, "rf"))
+    gbt_model.write().overwrite().save(os.path.join(BASELINE_DIR, "gbt"))
 
     with open(METRICS_JSON, "w") as f:
         json.dump(metrics, f, indent=2)

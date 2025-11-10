@@ -1,206 +1,205 @@
 # main.py
+"""
+NYC Taxi Fare Prediction - Pipeline Orchestrator
+Menjalankan seluruh pipeline machine learning secara berurutan.
+
+Urutan eksekusi:
+1. load_data.py       - Load & clean raw data
+2. eda.py             - Exploratory Data Analysis
+3. preprocessing.py   - Feature engineering & filtering
+4. vectorize.py       - Vectorization & train/test split
+5. modelling.py       - Train baseline models (LR, RF, GBT)
+6. evaluate.py        - Evaluate & compare models
+7. importance.py      - Feature importance analysis
+8. tuning.py          - Hyperparameter tuning (Random Forest)
+9. tuning_linear.py   - Hyperparameter tuning (Linear Regression)
+"""
+
+import subprocess
+import sys
 import os
-from pyspark.sql import SparkSession
-from pyspark.sql.types import StructType, StructField, DoubleType, IntegerType, StringType
-from pyspark.sql.functions import (
-    to_timestamp, col, trim, isnan, count as scount, avg, stddev,
-    min as smin, max as smax, sum as ssum,
-    radians, sin, cos, atan2, sqrt, lit, hour, dayofweek, month, year
-)
-from pyspark.ml.feature import VectorAssembler, StandardScaler
-from pyspark.ml import Pipeline
-from pyspark.ml.regression import LinearRegression, RandomForestRegressor, GBTRegressor
-from pyspark.ml.evaluation import RegressionEvaluator
-from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
+import time
+from datetime import datetime
 
-# ========= 0) SparkSession =========
-# Jika JAVA_HOME sudah benar ke Java 11, ini langsung jalan.
-spark = SparkSession.builder \
-    .appName("NYC Taxi Fare - PySpark (Local VS Code)") \
-    .master("local[*]") \
-    .config("spark.driver.memory", "4g") \
-    .getOrCreate()
+def print_header(text):
+    """Print formatted header"""
+    print("\n" + "="*70)
+    print(f"  {text}")
+    print("="*70)
 
-print("Spark version:", spark.version)
+def run_script(script_name, description=""):
+    """Run a Python script and handle errors"""
+    print_header(f"STEP: {script_name}")
+    if description:
+        print(f"  {description}")
+        print()
+    
+    start_time = time.time()
+    
+    try:
+        result = subprocess.run(
+            [sys.executable, script_name],
+            check=True,
+            capture_output=False,
+            text=True
+        )
+        
+        elapsed = time.time() - start_time
+        print(f"\n✅ {script_name} selesai dalam {elapsed:.1f} detik")
+        return True
+        
+    except subprocess.CalledProcessError as e:
+        elapsed = time.time() - start_time
+        print(f"\n❌ ERROR di {script_name} setelah {elapsed:.1f} detik")
+        print(f"   Exit code: {e.returncode}")
+        return False
+    except FileNotFoundError:
+        print(f"\n❌ File {script_name} tidak ditemukan!")
+        return False
+    except KeyboardInterrupt:
+        print(f"\n⚠️  Pipeline dibatalkan oleh user di {script_name}")
+        sys.exit(1)
 
-# ========= 1) Load data =========
-DATA_FP = os.path.join("data", "train.csv")
-if not os.path.exists(DATA_FP):
-    raise FileNotFoundError(f"train.csv tidak ditemukan di {DATA_FP}. Pastikan file ada di folder data/")
-
-schema = StructType([
-    StructField("key", StringType(), True),
-    StructField("fare_amount", DoubleType(), True),
-    StructField("pickup_datetime", StringType(), True),
-    StructField("pickup_longitude", DoubleType(), True),
-    StructField("pickup_latitude", DoubleType(), True),
-    StructField("dropoff_longitude", DoubleType(), True),
-    StructField("dropoff_latitude", DoubleType(), True),
-    StructField("passenger_count", IntegerType(), True),
-])
-
-train_df = spark.read.csv(DATA_FP, header=True, schema=schema)
-train_df = train_df.withColumn("pickup_datetime_ts", to_timestamp(col("pickup_datetime")))
-train_df.cache()
-print("Jumlah baris train:", train_df.count())
-train_df.printSchema()
-
-# ========= 2) EDA ringkas =========
-numeric_types = {"double","float","int","bigint","long","decimal","smallint","tinyint"}
-num_cols = [c for c,t in train_df.dtypes if t in numeric_types]
-str_cols = [c for c,t in train_df.dtypes if t == "string"]
-other_cols = [c for c,t in train_df.dtypes if (t not in numeric_types and t != "string")]  # contoh: timestamp
-
-aggs = []
-for c in num_cols:
-    aggs.append(ssum((col(c).isNull() | isnan(c)).cast("int")).alias(c))
-for c in str_cols:
-    aggs.append(ssum((col(c).isNull() | (trim(col(c)) == "")).cast("int")).alias(c))
-for c in other_cols:
-    aggs.append(ssum(col(c).isNull().cast("int")).alias(c))
-
-print("Jumlah nilai hilang per kolom:")
-train_df.agg(*aggs).show(truncate=False)
-
-if num_cols:
-    train_df.select(
-        *[smin(c).alias(f"{c}_min") for c in num_cols],
-        *[smax(c).alias(f"{c}_max") for c in num_cols]
-    ).show(truncate=False)
-    train_df.select(
-        *[avg(c).alias(f"{c}_avg") for c in num_cols],
-        *[stddev(c).alias(f"{c}_std") for c in num_cols]
-    ).show(truncate=False)
-
-if "passenger_count" in [c for c,_ in train_df.dtypes]:
-    train_df.groupBy("passenger_count").agg(scount("*").alias("n")).orderBy("passenger_count").show()
-
-# ========= 3) Preprocessing & Feature Engineering =========
-n_before = train_df.count()
-
-filtered = train_df.where(
-    (col("pickup_longitude").between(-79.0, -71.0)) &
-    (col("dropoff_longitude").between(-79.0, -71.0)) &
-    (col("pickup_latitude").between(38.0, 45.0)) &
-    (col("dropoff_latitude").between(38.0, 45.0)) &
-    (col("fare_amount") >= 0) &
-    (col("passenger_count").between(1, 6)) &
-    col("pickup_datetime_ts").isNotNull()
-)
-
-R = lit(6371.0)
-phi1 = radians(col("pickup_latitude"))
-phi2 = radians(col("dropoff_latitude"))
-dphi = radians(col("dropoff_latitude") - col("pickup_latitude"))
-dlmb = radians(col("dropoff_longitude") - col("pickup_longitude"))
-a = sin(dphi/2)**2 + cos(phi1)*cos(phi2)*(sin(dlmb/2)**2)
-c = 2*atan2(sqrt(a), sqrt(1-a))
-dist_km = R*c
-
-fe = filtered.select(
-    col("fare_amount").alias("label"),
-    hour(col("pickup_datetime_ts")).alias("pickup_hour"),
-    dayofweek(col("pickup_datetime_ts")).alias("pickup_dow"),
-    month(col("pickup_datetime_ts")).alias("pickup_month"),
-    year(col("pickup_datetime_ts")).alias("pickup_year"),
-    col("passenger_count"),
-    dist_km.alias("distance_km")
-)
-
-fe.cache()
-n_after = fe.count()
-print(f"Baris sebelum filter: {n_before} | sesudah filter: {n_after} | dibuang: {n_before - n_after}")
-
-# contoh sampling 1 juta baris
-fe_small = fe.limit(1_000_000).cache()
-print("Jumlah baris fe_small:", fe_small.count())
-
-
-# ========= 4) Vectorization & Split =========
-feature_cols = ["pickup_hour","pickup_dow","pickup_month","pickup_year","passenger_count","distance_km"]
-assembler = VectorAssembler(inputCols=feature_cols, outputCol="features_raw")
-scaler = StandardScaler(withMean=True, withStd=True, inputCol="features_raw", outputCol="features")
-
-prep_pipeline = Pipeline(stages=[assembler, scaler])
-prep_model = prep_pipeline.fit(fe_small)
-ds = prep_model.transform(fe_small).select("label","features")
-
-train, test = ds.randomSplit([0.8, 0.2], seed=42)
-print("Train:", train.count(), " Test:", test.count())
-
-# ========= 5) Modeling =========
-lr = LinearRegression(featuresCol="features", labelCol="label", predictionCol="prediction")
-lr_model = lr.fit(train)
-pred_lr = lr_model.transform(test)
-
-rf = RandomForestRegressor(featuresCol="features", labelCol="label", predictionCol="prediction",
-                           numTrees=120, maxDepth=14, seed=42)
-rf_model = rf.fit(train)
-pred_rf = rf_model.transform(test)
-
-gbt = GBTRegressor(featuresCol="features", labelCol="label", predictionCol="prediction",
-                   maxIter=120, maxDepth=8, seed=42)
-gbt_model = gbt.fit(train)
-pred_gbt = gbt_model.transform(test)
-
-# ========= 6) Evaluasi =========
-e_rmse = RegressionEvaluator(labelCol="label", predictionCol="prediction", metricName="rmse")
-e_mae  = RegressionEvaluator(labelCol="label", predictionCol="prediction", metricName="mae")
-e_r2   = RegressionEvaluator(labelCol="label", predictionCol="prediction", metricName="r2")
-
-def report_metrics(name, pred):
-    rmse = e_rmse.evaluate(pred)
-    mae  = e_mae.evaluate(pred)
-    r2   = e_r2.evaluate(pred)
-    print(f"{name:8s} -> RMSE: {rmse:.4f} | MAE: {mae:.4f} | R2: {r2:.4f}")
-
-report_metrics("Linear", pred_lr)
-report_metrics("RF",     pred_rf)
-report_metrics("GBT",    pred_gbt)
-
-# ========= 7) Tuning =========
-rf_base = RandomForestRegressor(featuresCol="features", labelCol="label", predictionCol="prediction", seed=42)
-paramGrid = (ParamGridBuilder()
-             .addGrid(rf_base.numTrees, [80, 120, 160])
-             .addGrid(rf_base.maxDepth, [10, 14, 18])
-             .addGrid(rf_base.featureSubsetStrategy, ["auto","sqrt"])
-             .build())
-
-cv = CrossValidator(
-    estimator=rf_base,
-    estimatorParamMaps=paramGrid,
-    evaluator=RegressionEvaluator(labelCol="label", predictionCol="prediction", metricName="rmse"),
-    numFolds=3,
-    parallelism=2,
-    seed=42
-)
-
-cv_model = cv.fit(train)
-pred_cv = cv_model.transform(test)
-print("Hasil model terbaik setelah tuning:")
-report_metrics("RF-CV", pred_cv)
-
-best_rf = cv_model.bestModel
-print("Best params:",
-      "numTrees=", best_rf.getNumTrees,
-      "maxDepth=", best_rf.getOrDefault("maxDepth"),
-      "featureSubsetStrategy=", best_rf.getOrDefault("featureSubsetStrategy"))
-
-# ========= 8) Feature Importance & contoh prediksi =========
-def show_feature_importance(model, feature_names):
-    if hasattr(model, "featureImportances"):
-        pairs = list(zip(feature_names, model.featureImportances))
-        pairs_sorted = sorted(pairs, key=lambda x: float(x[1]), reverse=True)
-        print("Feature importance:")
-        for k, v in pairs_sorted:
-            print(f"  {k:20s} -> {float(v):.6f}")
+def check_prerequisites():
+    """Check if required files exist"""
+    print_header("CHECKING PREREQUISITES")
+    
+    required_files = [
+        "config.py",
+        "spark_utils.py",
+        "load_data.py",
+        "eda.py",
+        "preprocessing.py",
+        "vectorize.py",
+        "modelling.py",
+        "evaluate.py",
+        "importance.py",
+        "tuning.py",
+        "tuning_linear.py"
+    ]
+    
+    missing = []
+    for file in required_files:
+        if not os.path.exists(file):
+            missing.append(file)
+            print(f"❌ {file} - NOT FOUND")
+        else:
+            print(f"✅ {file}")
+    
+    if missing:
+        print(f"\n❌ Missing files: {', '.join(missing)}")
+        return False
+    
+    # Check if data file exists
+    data_file = os.path.join("data", "train.csv")
+    if not os.path.exists(data_file):
+        print(f"\n❌ Data file not found: {data_file}")
+        return False
     else:
-        print("Model tidak menyediakan featureImportances.")
+        print(f"✅ {data_file}")
+    
+    print("\n✅ All prerequisites OK")
+    return True
 
-print("\n=== Feature importance untuk RF terbaik ===")
-show_feature_importance(best_rf, feature_cols)
+def main():
+    """Main pipeline orchestrator"""
+    start_time = datetime.now()
+    
+    print("\n" + "="*70)
+    print("  NYC TAXI FARE PREDICTION - FULL ML PIPELINE")
+    print("  PySpark MLlib Implementation")
+    print("="*70)
+    print(f"  Start time: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print("="*70)
+    
+    # Check prerequisites
+    if not check_prerequisites():
+        print("\n❌ Pipeline aborted - prerequisites not met")
+        sys.exit(1)
+    
+    # Define pipeline stages
+    pipeline = [
+        ("load_data.py", "Load & clean raw data dari CSV"),
+        ("eda.py", "Exploratory Data Analysis - statistik & visualisasi"),
+        ("preprocessing.py", "Feature engineering & data filtering"),
+        ("vectorize.py", "Feature vectorization & train/test split"),
+        ("modelling.py", "Train baseline models (LR, RF, GBT)"),
+        ("evaluate.py", "Evaluate & compare model performance"),
+        ("importance.py", "Analyze feature importance"),
+        ("tuning.py", "Hyperparameter tuning - Random Forest"),
+        ("tuning_linear.py", "Hyperparameter tuning - Linear Regression")
+    ]
+    
+    print(f"\n📋 Pipeline will execute {len(pipeline)} stages")
+    print("   Estimated total time: 20-40 minutes\n")
+    
+    # Confirmation
+    response = input("🚀 Ready to start? [Y/n]: ").strip().lower()
+    if response and response not in ['y', 'yes', '']:
+        print("❌ Pipeline cancelled by user")
+        sys.exit(0)
+    
+    # Execute pipeline
+    success_count = 0
+    failed_stages = []
+    
+    for i, (script, description) in enumerate(pipeline, 1):
+        print(f"\n📍 Stage {i}/{len(pipeline)}")
+        
+        if run_script(script, description):
+            success_count += 1
+        else:
+            failed_stages.append(script)
+            print(f"\n⚠️  Stage {i} failed: {script}")
+            
+            # Ask user if they want to continue
+            response = input("   Continue to next stage? [y/N]: ").strip().lower()
+            if response not in ['y', 'yes']:
+                print("\n❌ Pipeline aborted by user")
+                break
+    
+    # Final summary
+    end_time = datetime.now()
+    duration = end_time - start_time
+    
+    print_header("PIPELINE SUMMARY")
+    print(f"  Start time:    {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  End time:      {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
+    print(f"  Duration:      {duration}")
+    print(f"  Success:       {success_count}/{len(pipeline)} stages")
+    
+    if failed_stages:
+        print(f"  Failed stages: {', '.join(failed_stages)}")
+        print("\n❌ Pipeline completed with errors")
+        sys.exit(1)
+    else:
+        print("\n✅ Pipeline completed successfully!")
+        print("\n📊 Results saved in:")
+        print("   - artifacts/eda/                  (EDA outputs)")
+        print("   - artifacts/baseline_models/      (trained models)")
+        print("   - artifacts/best_rf_model/        (tuned Random Forest)")
+        print("   - artifacts/best_lr_model/        (tuned Linear Regression)")
+        print("   - artifacts/baseline_metrics.json (evaluation metrics)")
+        
+        print("\n📄 Check the following reports:")
+        print("   - INDEX.md                        (navigation)")
+        print("   - LAPORAN_01_DATA_LOADING.md     (Section 1)")
+        print("   - LAPORAN_02_EDA.md              (Section 2)")
+        print("   - LAPORAN_03_PREPROCESSING.md    (Section 3)")
+        print("   - LAPORAN_04_MODELING.md         (Section 4)")
+        print("   - LAPORAN_05_EVALUATION.md       (Section 5)")
+        print("   - LAPORAN_06_TUNING.md           (Section 6)")
+        print("="*70)
+        sys.exit(0)
 
-print("\n=== Contoh prediksi vs label ===")
-pred_cv.select("label","prediction").show(10, truncate=False)
-
-spark.stop()
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n\n⚠️  Pipeline interrupted by user (Ctrl+C)")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\n\n❌ Unexpected error: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
