@@ -13,6 +13,7 @@ Urutan eksekusi:
 7. importance.py      - Feature importance analysis
 8. tuning.py          - Hyperparameter tuning (Random Forest)
 9. tuning_linear.py   - Hyperparameter tuning (Linear Regression)
+10. predictions.py    - Generate actual vs predicted comparison
 """
 
 import subprocess
@@ -75,7 +76,8 @@ def check_prerequisites():
         "evaluate.py",
         "importance.py",
         "tuning.py",
-        "tuning_linear.py"
+        "tuning_linear.py",
+        "predictions.py"
     ]
     
     missing = []
@@ -127,7 +129,8 @@ def main():
         ("evaluate.py", "Evaluate & compare model performance"),
         ("importance.py", "Analyze feature importance"),
         ("tuning.py", "Hyperparameter tuning - Random Forest"),
-        ("tuning_linear.py", "Hyperparameter tuning - Linear Regression")
+        ("tuning_linear.py", "Hyperparameter tuning - Linear Regression"),
+        ("predictions.py", "Generate actual vs predicted comparison table")
     ]
     
     print(f"\n📋 Pipeline will execute {len(pipeline)} stages")
