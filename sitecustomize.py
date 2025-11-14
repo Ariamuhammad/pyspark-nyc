@@ -1,5 +1,3 @@
-# sitecustomize.py
-# Shim agar import `distutils` di Python 3.13 mengarah ke setuptools._distutils
 import sys, importlib, types
 
 try:

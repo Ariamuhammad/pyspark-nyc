@@ -1,4 +1,3 @@
-# vectorize.py
 import os
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler, StandardScaler

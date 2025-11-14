@@ -577,7 +577,7 @@ if __name__ == "__main__":
         corr_matrix,
     )
 
-    # Summary teks untuk laporan
+    # Summary text
     summary_lines = [
         f"Total rows                    : {total_rows:,}",
         f"Missing value CSV             : {MISSING_CSV}",

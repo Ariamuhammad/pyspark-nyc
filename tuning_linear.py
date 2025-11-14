@@ -1,4 +1,3 @@
-# tuning_linear.py
 import os
 from spark_utils import spark_session
 from config import TRAIN_FP, TEST_FP, ART_DIR

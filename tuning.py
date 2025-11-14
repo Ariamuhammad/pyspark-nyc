@@ -1,4 +1,3 @@
-# tuning.py
 import os
 from spark_utils import spark_session
 from config import TRAIN_FP, TEST_FP, BEST_RF_DIR
@@ -17,7 +16,6 @@ if __name__ == "__main__":
 
     rf = RandomForestRegressor(featuresCol="features", labelCol="label", predictionCol="prediction", seed=42)
 
-    # Grid ringan dan realistis untuk laptop
     paramGrid = (ParamGridBuilder()
                  .addGrid(rf.numTrees, [80])         # 1 nilai
                  .addGrid(rf.maxDepth, [10, 14])     # 2 nilai
@@ -30,7 +28,7 @@ if __name__ == "__main__":
         estimatorParamMaps=paramGrid,
         evaluator=evaluator,
         numFolds=3,
-        parallelism=1,   # stabil di Windows
+        parallelism=1,
         seed=42
     )
 

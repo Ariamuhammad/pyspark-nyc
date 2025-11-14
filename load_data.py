@@ -6,10 +6,7 @@ from config import DATA_CSV, RAW_PARQUET, PASSENGER_MIN, PASSENGER_MAX
 
 
 def report_data_quality(df):
-    """
-    Cek cepat kesehatan data mentah agar tahap 1 memenuhi kriteria mid-term.
-    Mengembalikan jumlah baris total untuk validasi tambahan.
-    """
+    
     geo_valid = (
         F.col("pickup_longitude").between(-79.0, -71.0) &
         F.col("dropoff_longitude").between(-79.0, -71.0) &

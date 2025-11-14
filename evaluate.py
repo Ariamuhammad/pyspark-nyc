@@ -1,4 +1,3 @@
-# evaluate.py
 import os
 from spark_utils import spark_session
 from config import TEST_FP, BASELINE_DIR

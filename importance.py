@@ -1,4 +1,3 @@
-# importance.py
 import os
 from spark_utils import spark_session
 from config import BEST_RF_DIR, FEATURE_COLS

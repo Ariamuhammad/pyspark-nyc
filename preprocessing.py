@@ -50,7 +50,7 @@ if __name__ == "__main__":
     fe.limit(200_000).persist(StorageLevel.MEMORY_AND_DISK).write.mode("overwrite").parquet(FE_SMALL)
     print(f"Tersimpan: {FE_PARQUET} dan subset {FE_SMALL} (200k rows)")
 
-    # Panduan fitur yang terbentuk (untuk tahap modeling berikutnya)
+    # Fitur yang terbentuk (untuk tahap modeling berikutnya)
     print("Fitur yang tersedia:", ", ".join(FEATURE_COLS))
 
     spark.stop()
